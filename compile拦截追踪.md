@@ -31,3 +31,18 @@ else:
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2322)__call__()
 -> def __call__(
 ```
+``` python
+    try:
+        result = self._inner_convert(
+            frame, cache_entry, hooks, frame_state, skip=skip + 1
+        )
+        counters["frames"]["ok"] += 1  # 编译成功
+        return result
+    except Exception as e:
+```
+_inner_convert进入ConvertFrameAssert
+ConvertFrameAssert.__call__调用_compile编译
+``` python
+increment_frame()  # 增加帧计数器
+code = frame.f_code  # 获取代码对象
+```
