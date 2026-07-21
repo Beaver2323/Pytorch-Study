@@ -21,3 +21,13 @@ else:
             # JustKnobs 开启 → 正常设置钩子
             return set_eval_frame(callback)
 ```
+经过各种跳过逻辑后到达真正执行的入口
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2642)__call__()
+-> result = self._torchdynamo_orig_backend(
+```
+然后进入class ConvertFrame
+```
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2322)__call__()
+-> def __call__(
+```
