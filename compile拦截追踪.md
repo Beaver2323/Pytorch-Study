@@ -45,4 +45,20 @@ ConvertFrameAssert.__call__调用_compile编译
 ``` python
 increment_frame()  # 增加帧计数器
 code = frame.f_code  # 获取代码对象
+.....
+#检查是否有缓存
+isolate_recompiles_id = get_eval_frame_isolate_recompiles_id()
+cache_entries = _get_cache_entries_for_region(code, isolate_recompiles_id)
 ```
+
+|跳过条件	|原因|
+|  ----  | ----  |
+|code in output_codes	|已经是 Dynamo 生成的代码|
+TORCHDYNAMO_DEBUG_FUNCTION 过滤	|只调试特定函数
+特定的 genexpr	|处理 transformers/diffusers 中的生成器表达式
+__setattr__ 帧	|属性设置函数不编译
+torch.optim 的 __init__	|优化器初始化不编译
+exec() 生成的帧|	动态生成的代码不编译
+namedtuple 构造函数	|特殊数据结构
+生成器函数	|生成器无法直接编译
+没有张量的帧	|没有张量操作，没必要编译
