@@ -117,3 +117,44 @@ _compile (总入口)<br>
     │       └── wrap_guarded_code (结果包装)<br>
     ├── 异常处理<br>
     └── 指标收集<br>
+* 进入compile_inner
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2116)_compile()
+-> guarded_code, tracer_output = compile_inner(code, one_graph, hooks)
+```
+_compile_inner<br>
+    ├── 1. 记录原始字节码 (log_bytecode)<br>
+    ├── 2. 执行帧编译 (compile_frame) ← 最核心！<br>
+    ├── 3. 获取编译结果 (dynamo_output)<br>
+    ├── 4. 记录修改后的字节码 (log_bytecode)<br>
+    ├── 5. 处理字节码钩子 (_bytecode_hooks)<br>
+    ├── 6. 验证代码对象一致性 (arg/free/cell vars)<br>
+    ├── 7. 构建守卫 (build_guards) ← 关键！<br>
+    ├── 8. 包装成 GuardedCode<br>
+    └── 9. 返回结果<br>
+* 将进入compile_frame
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1761)_compile_inner()
+-> dynamo_output = compile_frame(
+```
+compile_frame<br>
+    ├── 定义 transform 函数 (字节码转换器)<br>
+    ├── 循环尝试编译 (支持重试)<br>
+    │   ├── transform_code_object 调用<br>
+    │   │   └── transform 回调<br>
+    │   │       └── trace_frame (真正的字节码追踪)<br>
+    │   ├── 成功 → 返回 DynamoOutput<br>
+    │   └── 失败 → RestartAnalysis → 重试<br>
+    └── SkipFrame 异常 → 向上传递<br>
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1598)compile_frame()
+-> bytecode, tracer_output = transform_code_object(code, transform)
+```
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/bytecode_transformation.py(1822)transform_code_object()
+-> tracer_output = transformations(instructions, code_options)
+```
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1569)transform()
+-> tracer_output = trace_frame(
+```
