@@ -26,7 +26,7 @@ else:
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2642)__call__()
 -> result = self._torchdynamo_orig_backend(
 ```
-然后进入class ConvertFrame
+然后进入class ConvertFrame ， 将python字节码转换成FX Graph的主入口
 ``` bash
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2322)__call__()
 -> def __call__(
