@@ -62,3 +62,41 @@ exec() 生成的帧|	动态生成的代码不编译
 namedtuple 构造函数	|特殊数据结构
 生成器函数	|生成器无法直接编译
 没有张量的帧	|没有张量操作，没必要编译
+调用_compile编译
+```
+        try:
+            compile_ctx = compile_context(CompileContext(compile_id))
+            # When recompile_limit is set, temporarily override the global
+            # config so the existing exceeds_recompile_limit check uses it.
+            recompile_ctx = (
+                config.patch(recompile_limit=self._recompile_limit)
+                if self._recompile_limit is not None
+                else contextlib.nullcontext()
+            )
+            with compile_ctx, recompile_ctx:
+                result = _compile(
+                    frame.f_code,
+                    frame.f_globals,
+                    frame.f_locals,
+                    frame.f_builtins,
+                    frame.closure,
+                    self._torchdynamo_orig_backend,
+                    self._one_graph,
+                    self._export,
+                    self._export_constraints,
+                    hooks,
+                    cache_entry,
+                    cache_entries,
+                    cache_entries_for_reasons,
+                    cache_size,
+                    frame,
+                    frame_state=frame_state,
+                    compile_id=compile_id,
+                    skip=skip + 1,
+                    package=self._package,
+                    convert_frame_box=self._box,
+                )
+        finally:
+            # Restore the previous initial_global_state for nested compilation handling
+            initial_global_state = prev_initial_global_state
+```
