@@ -1,9 +1,9 @@
-包装器 torch/_dynamo/eval_frame.py compile_wrapper()
+* 包装器 torch/_dynamo/eval_frame.py compile_wrapper()
 ``` python
 @functools.wraps(fn)
 def compile_wrapper(*args: Any, **kwargs: Any) -> Any:
 ```
-相当于代理，包装器中使用set_eval_frame设置自定义的钩子（回调）拦截python帧
+* 相当于代理，包装器中使用set_eval_frame设置自定义的钩子（回调）拦截python帧
 ``` python
 prior = set_eval_frame(None)  # 保存旧钩子
 _maybe_set_eval_frame(_callback_from_stance(callback))  # 设置 Dynamo 的钩子
@@ -21,12 +21,12 @@ else:
             # JustKnobs 开启 → 正常设置钩子
             return set_eval_frame(callback)
 ```
-经过各种跳过逻辑后到达真正执行的入口
+* 经过各种跳过逻辑后到达真正执行的入口
 ``` bash
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2642)__call__()
 -> result = self._torchdynamo_orig_backend(
 ```
-然后进入class ConvertFrame ， 将python字节码转换成FX Graph的主入口
+* 然后进入class ConvertFrame ， 将python字节码转换成FX Graph的主入口
 ``` bash
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2322)__call__()
 -> def __call__(
@@ -40,8 +40,7 @@ else:
         return result
     except Exception as e:
 ```
-_inner_convert进入ConvertFrameAssert
-ConvertFrameAssert.__call__调用_compile编译
+* _inner_convert进入ConvertFrameAssert，ConvertFrameAssert.__call__调用_compile编译
 ``` python
 increment_frame()  # 增加帧计数器
 code = frame.f_code  # 获取代码对象
@@ -62,8 +61,9 @@ exec() 生成的帧|	动态生成的代码不编译
 namedtuple 构造函数	|特殊数据结构
 生成器函数	|生成器无法直接编译
 没有张量的帧	|没有张量操作，没必要编译
-调用_compile编译
-```
+ 
+* 调用_compile编译
+``` python
         try:
             compile_ctx = compile_context(CompileContext(compile_id))
             # When recompile_limit is set, temporarily override the global
@@ -100,3 +100,20 @@ namedtuple 构造函数	|特殊数据结构
             # Restore the previous initial_global_state for nested compilation handling
             initial_global_state = prev_initial_global_state
 ```
+* 进入_compile前
+``` bash
+(Pdb) p frame.f_locals
+{'config': <__main__.NpuModelConfig object at 0xfffddc6f3e00>, 'x': tensor([[-1.0217,  1.0408],
+        [ 0.3088, -1.0210]], device='npu:0')}
+(Pdb) p frame.f_globals.keys()
+dict_keys(['__name__', '__doc__', '__package__', '__loader__', '__spec__', '__annotations__', '__builtins__', '__file__', '__cached__', 'torch', 'torch_npu', 'pdb', 'NpuModelConfig', 'mock_npu_c_api', 'train_step', 'config_obj', 'input_tensor'])
+```
+_compile (总入口)<br>
+    ├── compile_inner (编译执行器)<br>
+    │   └── _compile_inner (核心编译器)<br>
+    │       ├── compile_frame (帧编译)<br>
+    │       │   └── InstructionTranslator (字节码解析)<br>
+    │       ├── build_guards (守卫构建)<br>
+    │       └── wrap_guarded_code (结果包装)<br>
+    ├── 异常处理<br>
+    └── 指标收集<br>
