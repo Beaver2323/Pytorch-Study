@@ -287,3 +287,71 @@ Instruction(opcode=53, opname='CALL', arg=1, argval=1, offset=14, starts_line=32
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1101)wrapper()
 -> return inner_fn(self, inst)
 ```
+### 更换了测试脚本
+``` python
+
+```
+``` bash
+(Pdb) b /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch_npu/utils/_dynamo.py:45
+Breakpoint 1 at /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch_npu/utils/_dynamo.py:45
+(Pdb) b /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch_npu/utils/_dynamo.py:380
+Breakpoint 2 at /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch_npu/utils/_dynamo.py:380
+```
+``` bash
+  /home/z50063656/test_trace2.py(27)<module>()
+-> result = test_npu_dynamo_patch(input_tensor)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/eval_frame.py(1190)compile_wrapper()
+-> result = fn(*args, **kwargs)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2642)__call__()
+-> result = self._torchdynamo_orig_backend(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2333)__call__()
+-> result = self._inner_convert(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(778)__call__()
+-> result = _compile(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2116)_compile()
+-> guarded_code, tracer_output = compile_inner(code, one_graph, hooks)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_utils_internal.py(96)wrapper_function()
+-> return function(*args, **kwargs)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1701)compile_inner()
+-> result = _compile_inner(code, one_graph, hooks)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1761)_compile_inner()
+-> dynamo_output = compile_frame(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1598)compile_frame()
+-> bytecode, tracer_output = transform_code_object(code, transform)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/bytecode_transformation.py(1822)transform_code_object()
+-> tracer_output = transformations(instructions, code_options)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1569)transform()
+-> tracer_output = trace_frame(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(369)_fn()
+-> return fn(*args, **kwargs)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(968)trace_frame()
+-> run_tracer()
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(949)run_tracer()
+-> tracer.run()
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(2033)run()
+-> while self.step():
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1686)step()
+-> self.dispatch_table[inst.opcode](self, inst)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1101)wrapper()
+-> return inner_fn(self, inst)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(4646)CALL()
+-> self._call(inst)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(4637)_call()
+-> self.call_function(fn, args, kwargs)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1570)call_function()
+-> if hasattr(fn, "value"):
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/variables/lazy.py(184)__getattr__()
+-> return getattr(self.realize(), item)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/variables/lazy.py(118)realize()
+-> self._cache.realize()
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/variables/lazy.py(50)realize()
+-> self.vt = builder.VariableBuilder(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/variables/builder.py(814)__call__()
+-> return self._call_impl(value)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/variables/builder.py(851)_call_impl()
+-> vt = self._wrap(value)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/variables/builder.py(1979)_wrap()
+-> result = UserDefinedClassVariable(
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch_npu/utils/_dynamo.py(380)UserDefinedClassVariable__new__()
+-> if value in [
+```
