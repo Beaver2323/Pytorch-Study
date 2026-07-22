@@ -177,3 +177,15 @@ compile_frame<br>
 8: BINARY_OP
 9: STORE_FAST
 ```
+| 索引 | 指令 | 对应代码 | 作用 |
+| :--- | :--- | :--- | :--- |
+| 0 | RESUME | `def train_step(...):` | Python 3.11+ 函数入口标记 |
+| 1 | LOAD_GLOBAL | `mock_npu_c_api` | 加载全局函数 `mock_npu_c_api` |
+| 2 | LOAD_FAST | `x` | 加载局部变量 `x`（输入张量） |
+| 3 | CALL | `mock_npu_c_api(x)` | 调用函数，将结果压入栈 |
+| 4 | STORE_FAST | `y = ...` | 将结果弹出栈并存储到局部变量 `y` |
+| 5 | LOAD_FAST | `y` | 加载局部变量 `y`（`mock_npu_c_api` 的返回值） |
+| 6 | LOAD_FAST | `config` | ⭐ 加载局部变量 `config`（你的自定义对象） |
+| 7 | LOAD_ATTR | `config.scale_factor` | ⭐ 从 `config` 对象中加载属性 `scale_factor` |
+| 8 | BINARY_OP | `y * config.scale_factor` | 执行乘法运算 |
+| 9 | STORE_FAST | `out = ...` | 将结果存储到局部变量 `out` |
