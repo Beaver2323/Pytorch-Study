@@ -250,7 +250,7 @@ if __name__ == "__main__":
 
     print(">>> 运行结果:", result)
 ```
-* continue 到CALL指令
+* continue 到CALL指令，dispatch_table分发到具体的功能函数, b /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py:1685
 ``` bash
 (Pdb) c
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1685)step()
@@ -260,4 +260,30 @@ Instruction(opcode=53, opname='CALL', arg=1, argval=1, offset=14, starts_line=32
 (Pdb) n
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1686)step()
 -> self.dispatch_table[inst.opcode](self, inst)
+(Pdb) p self.dispatch_table[inst.opcode]
+<function InstructionTranslatorBase.CALL at 0xfffdd9bb2160>
+```
+* 经过断图保护逻辑
+``` bash
+(Pdb) l
+1087        ) -> Callable[[InstructionTranslatorBase, Instruction], None]:
+1088            @functools.wraps(inner_fn)
+1089            def wrapper(self: InstructionTranslatorBase, inst: Instruction) -> None:
+1090                prev_push = self.current_instruction_push
+1091                self.current_instruction_push = push
+1092 ->             speculation = self.speculate()
+1093                if speculation.failed(self):
+1094                    # no need to restore current_instruction_push if speculation failed
+1095                    if speculation.reason is None:
+1096                        raise AssertionError(
+1097                            "expected speculation.reason is not None to be true"
+(Pdb) n
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1093)wrapper()
+-> if speculation.failed(self):
+(Pdb)
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1100)wrapper()
+-> try:
+(Pdb) n
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1101)wrapper()
+-> return inner_fn(self, inst)
 ```
