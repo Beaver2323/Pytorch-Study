@@ -85,3 +85,38 @@ def patch_user_defined_class_variable():
         return result
 
     UserDefinedClassVariable._in_graph_classes = patched_in_graph_classes
+```
+### 2.2 补全 NPU 特定的 IR（计算图节点）翻译逻辑
+``` python
+class NpuStreamContextVariable(StreamContextVariable):
+    # ...
+    def enter(self, tx: "InstructionTranslator", *args: VariableTracker) -> VariableTracker:
+        if self.get_stream():
+            tx.output.create_proxy(
+                "call_function",
+                self.device_interface.set_stream,
+                (self.get_stream().as_proxy(),),
+                {},
+            )
+        return super().enter(tx)
+```
+由于 NPU 绕过了原生针对 torch.cuda.StreamContext 的 _id_dispatch 分发，必须自己告诉 Dynamo 如何处理 with torch.npu.stream(...) 语法。<br>
+patch_npu_stream_context 重写了上下文进入（enter）和退出（exit）的逻辑。<br>
+当 Dynamo 解析到该上下文时，会自动在底层计算图（FX Graph）中插入对应的 set_stream 代理节点（Proxy Node），确保编译后的计算图在 NPU 后端执行时拥有正确的并发流控制。<br>
+### 2.3
+``` python
+def UserDefinedClassVariable__new__(cls, value, **kwargs):
+        if value in [
+            torch.npu.amp.autocast,
+            # ...
+        ]:
+            # 返回专用的上下文管理器 Variable
+            return NPUTorchCtxManagerClassVariable(value, **kwargs)
+        elif value in [
+            torch_npu.npu.FloatTensor,
+            # ...
+        ]:
+            # 强制转为图内函数 Variable
+            return TorchInGraphFunctionVariable(value, **kwargs)
+        return cls.__new__raw(cls)
+```
