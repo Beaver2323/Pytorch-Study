@@ -44,4 +44,44 @@ def patch_user_defined_class_variable():
     # 动态覆盖，完成 Monkey Patch
     UserDefinedClassVariable.__new__ = UserDefinedClassVariable__new__
 ```
+# NPU 在 Dynamo 中被拦截的原因与 Patch 解决机制分析
 
+## 1. 移除 Patch 后的拦截原因（结合 PDB 运行记录）
+
+当移除 NPU 的 patch 并在 `fullgraph=True` 模式下运行时，代码在执行 `s = torch.npu.stream(torch.npu.Stream())` 时发生崩溃。结合之前的 PDB 堆栈追踪，拦截的根本原因可归结为以下过程：
+
+**PDB 堆栈核心片段：**
+> `.../polyfills/__init__.py(369) instantiate_user_defined_class_object`
+> `.../npu/streams.py(25) __new__`
+> `.../npu/utils.py(108) __init__`
+> `.../npu/utils.py(158) _get_device_index`
+> `torch._dynamo.exc.Unsupported: ... marked as skipped ... qualname: _get_device_index, skip reason: file matches MOD_SKIPLIST`
+
+**拦截原因剖析：**
+1. **设备硬编码导致兜底：** 原生 Dynamo（`_id_dispatch`）只认识 `torch.cuda.Stream`。由于移除了 patch，`torch.npu.Stream` 匹配失败，被兜底降级为普通的 `UserDefinedClassVariable`。
+2. **强制内联展开（Polyfill）：** Dynamo 试图将这个“普通类”翻译进计算图，于是进入 `polyfills/instantiate_user_defined_class_object`，强行步入（step into）该类的 `__new__` 和 `__init__` 方法。
+3. **触碰禁区（MOD_SKIPLIST）：** 在追踪 `__init__` 时，调用链进入了 `torch._utils._get_device_index`。原生 PyTorch 将 `torch._utils` 模块硬编码在 `MOD_SKIPLIST`（禁止追踪黑名单）中。Dynamo 发现越界，立刻抛出 `Unsupported` 异常导致编译崩溃。
+
+---
+
+## 2. NPU 源码如何解决该问题（结合 Patch 代码解析）
+
+`torch_npu` 通过动态修改 Dynamo 的底层行为（Monkey Patch），在不修改 PyTorch 核心代码的前提下，让 NPU 组件获得了与 CUDA 相同的“图内特权”。
+
+### 2.1 扩充 `_in_graph_classes` 白名单（阻断 `__init__` 追踪）
+
+**对应源码：**
+```python
+def patch_user_defined_class_variable():
+    original_method = UserDefinedClassVariable._in_graph_classes
+
+    @staticmethod
+    @functools.lru_cache(None)
+    def patched_in_graph_classes():
+        result = original_method()
+        # 核心修复：强行将 NPU 类加入免检白名单
+        result.add(torch.npu.Event)
+        result.add(torch.npu.Stream)
+        return result
+
+    UserDefinedClassVariable._in_graph_classes = patched_in_graph_classes
