@@ -20,7 +20,8 @@ def _id_dispatch(self, value):
     # [穿透]：npu.StreamContext 等 NPU 对象匹配全部失败，掉入最底层
     # 返回兜底容器，将其视为毫无特殊语义的纯 Python 类
     return UserDefinedClassVariable(value, ...) 
-
+```
+``` python
 # ==========================================
 # 2. torch_npu 侧：在兜底容器的入口实施拦截
 # 位置：torch_npu/utils/_dynamo.py
@@ -42,3 +43,5 @@ def patch_user_defined_class_variable():
         
     # 动态覆盖，完成 Monkey Patch
     UserDefinedClassVariable.__new__ = UserDefinedClassVariable__new__
+```
+
