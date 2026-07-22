@@ -185,7 +185,79 @@ compile_frame<br>
 | 3 | CALL | `mock_npu_c_api(x)` | 调用函数，将结果压入栈 |
 | 4 | STORE_FAST | `y = ...` | 将结果弹出栈并存储到局部变量 `y` |
 | 5 | LOAD_FAST | `y` | 加载局部变量 `y`（`mock_npu_c_api` 的返回值） |
-| 6 | LOAD_FAST | `config` | ⭐ 加载局部变量 `config`（你的自定义对象） |
-| 7 | LOAD_ATTR | `config.scale_factor` | ⭐ 从 `config` 对象中加载属性 `scale_factor` |
+| 6 | LOAD_FAST | `config` |  加载局部变量 `config`（你的自定义对象） |
+| 7 | LOAD_ATTR | `config.scale_factor` |  从 `config` 对象中加载属性 `scale_factor` |
 | 8 | BINARY_OP | `y * config.scale_factor` | 执行乘法运算 |
 | 9 | STORE_FAST | `out = ...` | 将结果存储到局部变量 `out` |
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1639)step()
+-> def step(self) -> bool:
+```
+step负责单步追踪字节码，构建FX Graph
+* 示例代码
+``` python
+import torch
+import torch_npu
+import pdb
+
+
+# ==========================================
+# 触发点 1：自定义 Python 类
+# 预期：Dynamo 会用 UserDefinedClassVariable 包装它
+# ==========================================
+class NpuModelConfig:
+    def __init__(self, scale_factor):
+        self.scale_factor = scale_factor
+
+
+# ==========================================
+# 触发点 2：被显式禁用的函数（模拟 NPU 底层 C++ API）
+# 预期：Dynamo 会用 SkipFunctionVariable 包装它
+# ==========================================
+@torch._dynamo.disable
+def mock_npu_c_api(tensor):
+    # 模拟一个无法被 Dynamo 解析的底层调用
+    print("[Runtime] 执行被 Skip 的底层 NPU 函数...")
+    return tensor + 1.0
+
+
+# ==========================================
+# 编译入口
+# ==========================================
+@torch.compile(backend="eager", fullgraph=False)
+def train_step(config, x):
+    # 触发 SkipFunctionVariable 追踪
+    y = mock_npu_c_api(x)
+
+    # 触发 UserDefinedClassVariable 属性读取
+    out = y * config.scale_factor
+    return out
+
+
+if __name__ == "__main__":
+    # 初始化 NPU 设备和数据
+    torch.npu.set_device(0)
+    config_obj = NpuModelConfig(scale_factor=2.0)
+    input_tensor = torch.randn(2, 2).npu()
+
+    print(">>> 准备进入编译阶段，启动 PDB...")
+
+    # 在 Dynamo 触发前打断点
+    pdb.set_trace()
+
+    # 初次运行会触发 Dynamo Tracing
+    result = train_step(config_obj, input_tensor)
+
+    print(">>> 运行结果:", result)
+```
+* continue 到CALL指令
+``` bash
+(Pdb) c
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1685)step()
+-> try:
+(Pdb) self.current_instruction
+Instruction(opcode=53, opname='CALL', arg=1, argval=1, offset=14, starts_line=32, is_jump_target=False, positions=Positions(lineno=32, end_lineno=32, col_offset=8, end_col_offset=25), target=None, exn_tab_entry=None, argrepr=None)
+(Pdb) n
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(1686)step()
+-> self.dispatch_table[inst.opcode](self, inst)
+```
