@@ -158,3 +158,22 @@ compile_frame<br>
 > /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1569)transform()
 -> tracer_output = trace_frame(
 ```
+* 之后经过几次跳转，至InstructionTranslatorBase
+``` bash
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/symbolic_convert.py(2026)run()
+-> def run(self) -> None:
+```
+* 查看当前指令列表的情况
+``` bash
+(Pdb) for i, inst in enumerate(self.instructions[:10]):print(f"{i}: {inst.opname}")
+0: RESUME
+1: LOAD_GLOBAL
+2: LOAD_FAST
+3: CALL
+4: STORE_FAST
+5: LOAD_FAST
+6: LOAD_FAST
+7: LOAD_ATTR
+8: BINARY_OP
+9: STORE_FAST
+```
