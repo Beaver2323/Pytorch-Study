@@ -289,7 +289,34 @@ Instruction(opcode=53, opname='CALL', arg=1, argval=1, offset=14, starts_line=32
 ```
 ### 更换了测试脚本
 ``` python
+import torch
+import torch_npu
+import pdb
 
+@torch.compile(backend="eager", fullgraph=False)
+def test_npu_dynamo_patch(x):
+    # 触发点 1：使用白名单中的 NPU FloatTensor (命中第 392 行)
+    # 这会调用 UserDefinedClassVariable__new__ 并返回 TorchInGraphFunctionVariable
+    tensor_type = torch_npu.npu.FloatTensor
+    
+    # 触发点 2：使用白名单中的 NPU stream (命中第 46 行)
+    # 这会调用 SkipFunctionVariable__new__ 并返回 TorchInGraphFunctionVariable
+    s = torch.npu.stream(torch.npu.Stream())
+    
+    with s:
+        y = x + 1.0
+        
+    return y, tensor_type
+
+if __name__ == "__main__":
+    torch.npu.set_device(0)
+    input_tensor = torch.randn(2, 2).npu()
+
+    print(">>> 准备进入编译阶段，启动 PDB...")
+    pdb.set_trace() # 在这里打好上述的按行号断点，然后输入 c
+
+    result = test_npu_dynamo_patch(input_tensor)
+    print(">>> 运行结果:", result)
 ```
 ``` bash
 (Pdb) b /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch_npu/utils/_dynamo.py:45
