@@ -88,3 +88,20 @@ If you are removing an existing torch level API:
 | torch_non_c_binding_in_graph_functions_npu | NPU 的上层纯 Python API（如 `torch.npu.stream`, `empty_cache`） | TorchInGraphFunctionVariable | 阻止展开，直接作为黑盒节点保留在 FX Graph 中。 |
 | torch_c_binding_in_graph_functions_npu | NPU 的底层 C++ 绑定 API（如 `_C._npu_emptyCache`） | TorchInGraphFunctionVariable | 防止 Dynamo 尝试追踪二进制 C++ 代码导致 Unsupported 崩溃，同样作为图内节点保留。 |
 | skip_functions_npu | 具有全局副作用的 API（如 `torch.npu.set_device`） | SkipFunctionVariable | 触发图断裂（Graph Break），让这段代码回退给 Python 原生解释器立刻执行。 |
+``` python
+# torch_npu/_init/registry/dynamo.py
+def register_dynamo_backends():
+    from torch_npu.dynamo import _register_backends
+
+    _register_backends()
+
+
+def register_dynamo_trace_rules():
+    """
+    # Support stream into Dynamo charts. Enable Dynamo to recognize NPU
+    stream/device/memory/random APIs and related torch_npu._C bindings during graph capture.
+    """
+    from torch_npu.dynamo.trace_rule import _patch_npu_trace_rules
+
+    _patch_npu_trace_rules()
+```
