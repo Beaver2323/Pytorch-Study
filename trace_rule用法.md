@@ -105,3 +105,49 @@ def register_dynamo_trace_rules():
 
     _patch_npu_trace_rules()
 ```
+
+# PyTorch Dynamo `trace_rule` 路由机制与 NPU 适配深度解析
+
+在 PyTorch 2.x 的 `torch.compile` (Dynamo) 编译体系中，`trace_rule` 是决定代码能否成功转换为计算图（FX Graph）的“最高宪法”。本文档提炼了 Dynamo 底层路由优先级规则、NPU 适配的痛点，以及如何通过 PDB 源码级调试揭示图断裂（Graph Break）的根因。
+
+---
+
+## 一、 Dynamo 路由机制的 5 级优先级判定
+
+根据 PyTorch 官方设计指南，当 Dynamo 遇到一个函数时，会按照以下优先级顺序决定是“内联步入（Inline）”、“跳过（Skip）”还是“转为图节点（InGraph）”：
+
+1. **`manual_torch_name_rule_map` (Inline/InGraph if YES) —— 👑 第一优先级**
+2. **`MOD_INLINELIST`** (模块级白名单：尝试内联展开)
+3. **`BUILTIN_SKIPLIST` & `THIRDPARTY_SKIPLIST`** (默认黑名单：包含 `torch`, `numpy` 等，遇之即跳过)
+4. **`MOD_SKIPLIST`** (文件级黑名单：跳过特定模块)
+5. **Inline by default** (默认行为：内联步入追踪源码)
+
+**⚠️ NPU 踩坑的根本原因（命名空间陷阱）：**
+官方规定，整个 `torch.*` 命名空间默认处于第 3 优先级的 `BUILTIN_SKIPLIST` 中。NPU 的扩展 API（如 `torch.npu.stream`）会因此被 Dynamo 误判为需要跳过的黑盒。如果在 `fullgraph=True`（严禁图断裂）模式下，这会导致直接触发 `Unsupported` 崩溃。
+
+---
+
+## 二、 核心解法：三种 Variable 语义与 VIP 截胡
+
+为了打破上述的默认黑名单限制，NPU 必须利用 **“第 1 优先级可以覆盖一切”** 的规则，将 API 注入全局的 `torch_name_rule_map`。注入时，需严格对齐以下三种 Variable 语义：
+
+| 变量类型 | Dynamo 行为 | 适用 NPU 场景 |
+| :--- | :--- | :--- |
+| **`TorchInGraphFunctionVariable`** | **图内黑盒 / 常量折叠**。直接生成 FX Graph 节点，不追踪内部 Python 源码。 | NPU 的 C++ 底层算子（如 `_C._npu_emptyCache`）、张量操作、需直接下发给 Inductor 的流/事件控制。 |
+| **`SkipFunctionVariable`** | **触发 Graph Break**。打断计算图，退回 Python 原生解释器立即执行。 | 带有全局副作用、绝对不能延迟执行的函数（如 `torch.npu.set_device`）。 |
+| **`UserFunctionVariable`** | **内联展开 (Inline)**。强行步入该函数，逐行解析内部字节码。 | NPU 侧编写的无副作用纯 Python 辅助工具函数。 |
+
+---
+
+## 三、 Dynamo 查表拦截的底层全流程剖析
+
+当我们执行 `s = torch.npu.stream(torch.npu.Stream())` 时，Dynamo 在解析字节码（`VariableBuilder` 加载阶段）会调用核心分发函数：`torch._dynamo.trace_rules._lookup_inner`。
+
+该函数分为三个关键步骤（Step 1 到 Step 3）：
+
+### 🟢 Step 1: VIP 快速通道 (补丁生效点)
+```python
+# torch/_dynamo/trace_rules.py -> _lookup_inner()
+rule = get_torch_obj_rule_map().get(obj, None)
+if rule is not None:
+    return rule  # 完美截胡！直接返回 TorchInGraphFunctionVariable
