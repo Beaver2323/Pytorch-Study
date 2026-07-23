@@ -1,18 +1,20 @@
 ```
-This module contains classes and utilities for building variable trackers in Dynamo.
-Variable trackers are used to convert Python values into symbolic representations
-that can be traced and transformed during graph capture.
+Tracing rules and policies for TorchDynamo compilation decisions.
 
-The key classes are:
+This module defines the rules that govern what code TorchDynamo should trace and compile
+versus what should be executed eagerly. It contains functions and classes that determine:
 
-- VariableBuilder: Handles source-tracked objects that need guards and proper
-  reconstruction in the output graph. Used for inputs, module attributes, etc.
+- Which modules, functions, and objects should be skipped during tracing
+- Which parts of the code should cause graph breaks
+- How to handle different Python libraries and third-party packages
+- Rules for determining when to inline functions vs calling them eagerly
 
-- SourcelessBuilder: Handles ephemeral objects created during tracing that don't
-  need source tracking or guards. Used for temporary lists, intermediate values, etc.
+Key components:
+- Skip rules: Functions that return True if an object should be skipped during tracing
+- Inlining rules: Policies for when to inline function calls during compilation
+- Library-specific handling: Special cases for popular Python packages
+- Performance heuristics: Rules that balance compilation overhead vs runtime benefits
 
-Variable trackers enable Dynamo to track the flow of values through the program,
-maintain guards for dynamic properties, and reconstruct values in the output graph.
-The builders in this module handle converting Python values into appropriate
-VariableTracker instances based on their type and usage context.
+These rules are critical for TorchDynamo's ability to automatically determine
+compilation boundaries and optimize PyTorch programs effectively.
 ```
