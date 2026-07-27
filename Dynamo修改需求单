@@ -1,0 +1,85 @@
+# Dynamo 变量捕获拦截与追踪分析
+
+## 1. 需求描述
+
+* **核心需求**：拦截 Dynamo 内部 `VariableTracker` 的构造过程，强制识别 NPU 类型。主要涉及 `torch_npu/torch_npu/utils/_dynamo.py` 中的 `UserDefinedClassVariable.__new__` 与 `SkipFunctionVariable.__new__`。
+* **当前防御方案**：增加 try-except 保护与版本门禁。
+* **最终治本方案**：推动 PyTorch 提供 `register_backend_specific_variable` 官方接口，替代对 `__new__` 的 Hook。
+* **Trace Rule 改进方向**：`torch_npu/dynamo/trace_rule.py` 内定义了关于 trace_rule 的注册流程，可以考虑定义新的 rule，然后把对应的注册流程修改（待确认可行性）。
+* **风险点**：依赖了非公开的内部类结构。上游重构（如类名变更、参数变动）时会立即导致 Crash。
+* **进度与排期**：已完成 RFC 评审，待提交社区 (2026.8.30)。
+
+## 2. 基础知识与参考资料
+
+* **学习方法**：使用 pdb 调试简单脚本观察 Dynamo 行为。
+* **学习总结**：[Dynamo 追踪的学习总结](https://github.com/Beaver2323/Pytorch-Study/edit/main/compile%E6%8B%A6%E6%88%AA%E8%BF%BD%E8%B8%AA.md)
+
+## 3. 上游位置与修法 (EP2)
+
+* **涉及的上游位置**：
+  * `variables/user_defined.py:311 _in_graph_classes`
+  * `variables/streams.py:602 _stream_fn_to_variable_cls`
+  * `UserDefinedClassVariable/SkipFunctionVariable.__new__`
+  * `record_stream/Event` 簇
+  * `TensorVariable.call_method(Tensor.type)`
+  * `trace_rules.torch_name_rule_map`
+* **当前缺陷**：硬编码了 cuda/xpu，无 per-device 追踪规则注册。
+* **修改方法**：给 `DeviceInterface` 增 Dynamo 槽，上述各处改为从契约派生，并提供按设备注册追踪规则入口。
+  * 示例：`EP2:_in_graph_classes() -> {torch.Tensor, torch.Stream, torch.Event} ∪ {iface.dynamo_tensor_classes ∪ {iface.Stream, iface.Event} for iface in registered}`。
+* **其他策略**：移除对 stream 相关的 trace_rule，使用 Fullgraph。
+
+## 4. 关键代码阅读与分析
+
+### 4.1 `SkipFunctionVariable` (第 44-51 行)
+只拦截 `torch.npu.stream` 等 3 个特定的流控制函数。如果传入的是 `@torch._dynamo.disable` 包装的 api，条件 `if value in [...]` 不成立，代码会直接执行第 51 行的 `return cls.__new__raw(cls)`，退回到 PyTorch 原生的处理逻辑（即“抓了再放”）。
+
+### 4.2 `UserDefinedClassVariable` (第 379-400 行)
+只拦截 NPU 的 autocast 混合精度上下文，以及特定的 NPU Tensor 类型（如 `FloatTensor`, `HalfTensor` 等）。自定义纯 Python 类会触发 `return cls.__new__raw(cls)`（“抓了再放”）。
+
+```python
+379     def UserDefinedClassVariable__new__(cls, value, **kwargs):
+380         if value in [
+381             torch.npu.amp.autocast,
+382             torch_npu.npu.amp.autocast,
+383             torch.npu.amp.autocast_mode.autocast,
+384             torch_npu.npu.amp.autocast_mode.autocast,
+385         ]:
+386             return NPUTorchCtxManagerClassVariable(value, **kwargs)
+387         elif value in [
+388             torch_npu.npu.BoolTensor,
+389             torch_npu.npu.ByteTensor,
+390             torch_npu.npu.CharTensor,
+391             torch_npu.npu.DoubleTensor,
+392             torch_npu.npu.FloatTensor,
+393             torch_npu.npu.HalfTensor,
+394             torch_npu.npu.IntTensor,
+395             torch_npu.npu.LongTensor,
+396             torch_npu.npu.ShortTensor,
+397             torch_npu.npu.BFloat16Tensor,
+398         ]:
+399             return TorchInGraphFunctionVariable(value, **kwargs)
+400         return cls.__new__raw(cls)
+```
+
+## 5. 调试栈信息
+
+执行 `b torch._dynamo.variables.functions.SkipFunctionVariable.call_function` 时，报错前的核心调用栈如下：
+
+```text
+-> result = test_npu_dynamo_patch(input_tensor)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/eval_frame.py(1190)compile_wrapper()
+-> result = fn(*args, **kwargs)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2642)__call__()
+-> result = self._torchdynamo_orig_backend(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(778)__call__()
+-> result = _compile(
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(2116)_compile()
+-> guarded_code, tracer_output = compile_inner(code, one_graph, hooks)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_utils_internal.py(96)wrapper_function()
+-> return function(*args, **kwargs)
+  /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/convert_frame.py(1701)compile_inner()
+...
+-> return getattr(self.realize(), name)(*args, **kwargs)
+> /data/env_common/miniconda3/envs/zyf_2.14_inductor/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py(2279)call_function()
+-> if self.value in (importlib.util.find_spec, importlib.metadata.version) and all(
+```
