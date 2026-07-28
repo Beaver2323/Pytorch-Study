@@ -1,0 +1,14 @@
+私钥放于远端的~/.ssh/authorized_keys，赋权限600
+本地VScode设置的时候需要一个
+``` json
+{
+    // 你已有的其他配置保持不变...
+    
+    "remote.SSH.remotePlatform": {
+        "服务器ip": "linux"
+    },
+    "remote.SSH.serverInstallPath": {
+        "服务器ip": "/root/.vscode-server（自己设置）"
+    }
+}
+```
